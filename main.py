@@ -1,5 +1,5 @@
 import sys
-from ImageMiniLab import *
+from lab4 import *
 from PyQt5.QtWidgets import QApplication
 
 if __name__ == '__main__':

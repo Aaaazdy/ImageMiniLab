@@ -1,27 +1,18 @@
-'''
-file: ImageMiniLab.py
-date: 2019/04/19 20:00
-author: itisyang@gmail.com
-brief: opencv-python 应用
-note: PyQt5 + Qt Designer + Python 3.7
-'''
-
-
-
+import sys
 import cv2 as cv
 import numpy as np
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QMessageBox
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
-from ImageMiniLabUI import *
+from lab4UI import *
 
 
 # 图像信息
 def get_image_info(image):
-    print("图像类型：",type(image))
-    print("图像长x宽x通道数：",image.shape)
-    print("图像长宽通道数相乘所得值：",image.size)
-    print("图像像素值类型：",image.dtype)
+    print("图像类型：", type(image))
+    print("图像长x宽x通道数：", image.shape)
+    print("图像长宽通道数相乘所得值：", image.size)
+    print("图像像素值类型：", image.dtype)
     pixel_data = np.array(image)  # 将图像转换成数组
     print("像素大小：", pixel_data)
 
@@ -34,7 +25,12 @@ def clamp(pv):
     else:
         return pv
 
-
+# tool class to generate output
+class EmittingStr(QtCore.QObject):
+    textWritten = QtCore.pyqtSignal(str)  # 定义一个发送str的信号
+    def write(self, text):
+        self.textWritten.emit(str(text))
+   
 class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
     def __init__(self, parent=None):
         super(ImageMiniLab, self).__init__(parent)
@@ -48,22 +44,34 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
         self.src_file = ""  # 图像原始路径，cv处理用
         self.src_pix = QPixmap()  # 未处理像素，显示用
         self.dst_pix = QPixmap()  # 处理后像素，显示用
-
         # 实验内容，接口定义，实验入口
-        self.exp_type = {"选择实验类型":self.no_exp_type,
-                         "灰度化":self.to_gray,
-                         "反转": self.bitwise_not,
-                         "通道分离": self.channels_split,
-                         "噪声、滤波": self.noise_and_blur,
-                         "高斯双边滤波": self.bilateral_filter,
-                         "均值偏移滤波": self.mean_shift_filter,
+        sys.stdout = EmittingStr(textWritten=self.outputWritten)
+        sys.stderr = EmittingStr(textWritten=self.outputWritten)
+        # 实验内容，接口定义，实验入口
+        self.exp_type = {"选择实验内容": self.no_exp_type,
+                         "直方图均衡化": self.equalization,
                          "图像二值化": self.threshold,
+                         "添加噪声后平滑处理": self.noise_and_blur,
                          "Canny边缘检测": self.canny_edge,
-                         "直线检测": self.hough_line,
-                         "圆检测": self.hough_circles,
-                         "轮廓发现": self.find_contours,
-                         "人脸识别": self.face_recognize}
+                         }
         self.ExpTypeComboBox.addItems(self.exp_type)
+    def outputWritten(self, text):
+        cursor = self.textBrowser.textCursor()
+        cursor.movePosition(QtGui.QTextCursor.End)
+        cursor.insertText(text)
+        self.textBrowser.setTextCursor(cursor)
+        self.textBrowser.ensureCursorVisible()
+    def show_exp_pix(self):
+        if self.src_pix.width() > 0:
+            w = self.SrcImgShowLabel.width()
+            h = self.SrcImgShowLabel.height()
+            self.SrcImgShowLabel.setPixmap(
+                self.src_pix.scaled(w, h, Qt.KeepAspectRatio))
+        if self.dst_pix.width() > 0:
+            w = self.DstImgShowLabel.width()
+            h = self.DstImgShowLabel.height()
+            self.DstImgShowLabel.setPixmap(
+                self.dst_pix.scaled(w, h, Qt.KeepAspectRatio))
 
     # 载入图像（初次）
     def load_exp_img(self, img_name):
@@ -82,11 +90,13 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
         if self.src_pix.width() > 0:
             w = self.SrcImgShowLabel.width()
             h = self.SrcImgShowLabel.height()
-            self.SrcImgShowLabel.setPixmap(self.src_pix.scaled(w, h, Qt.KeepAspectRatio))
+            self.SrcImgShowLabel.setPixmap(
+                self.src_pix.scaled(w, h, Qt.KeepAspectRatio))
         if self.dst_pix.width() > 0:
             w = self.DstImgShowLabel.width()
             h = self.DstImgShowLabel.height()
-            self.DstImgShowLabel.setPixmap(self.dst_pix.scaled(w, h, Qt.KeepAspectRatio))
+            self.DstImgShowLabel.setPixmap(
+                self.dst_pix.scaled(w, h, Qt.KeepAspectRatio))
 
     # 窗口大小变化，使显示内容适应窗口大小
     def resizeEvent(self, event):
@@ -102,7 +112,8 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
     @QtCore.pyqtSlot()
     def on_SelectImgPushButton_clicked(self):
         # 设置文件扩展名过滤,注意用双分号间隔
-        img_name, file_type = QFileDialog.getOpenFileName(self, "选取实验图片", ".", "All Files (*);;Images (*.png *.jpg *.bmp)")
+        img_name, file_type = QFileDialog.getOpenFileName(
+            self, "选取实验图片", ".", "All Files (*);;Images (*.png *.jpg *.bmp)")
         print(img_name)
         if len(img_name) == 0:
             return
@@ -112,7 +123,7 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
     def on_LoadTestDataPushButton_clicked(self):
         # 测试参数
         self.ExpTypeComboBox.setCurrentIndex(1)
-        test_img = './lena.jpg'
+        test_img = './Lena.bmp'
         self.ExpImgLineEdit.setText(test_img)
         self.load_exp_img(test_img)
 
@@ -139,53 +150,19 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
     def cv_read_img(self, img):
         src = cv.imread(img)
         if src is None:
-            QMessageBox.warning(self, "载入出错", "图片读取失败。\n（可能原因：无图片、无正确权限、不受支持或未知的格式）")
+            QMessageBox.warning(
+                self, "载入出错", "图片读取失败。\n（可能原因：无图片、无正确权限、不受支持或未知的格式）")
             return None
         return src
 
 
     def decode_and_show_dst(self, dst):
-        ret, img_buf = cv.imencode(".jpg", dst)
+        ret, img_buf = cv.imencode(".bmp", dst)
         # print(ret, img_buf)
         if ret is True:
             ret = self.dst_pix.loadFromData(img_buf)
             if ret is True:
                 self.show_exp_pix()
-
-    # 灰度化
-    def to_gray(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-        gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
-        # print("类型", type(gray))
-        # get_image_info(gray)
-        self.decode_and_show_dst(gray)
-
-    # 反转
-    def bitwise_not(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-        dst = cv.bitwise_not(src)  # 按位取反，白变黑，黑变白
-        self.decode_and_show_dst(dst)
-
-    # 通道分离
-    def channels_split(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-        b, g, r = cv.split(src)
-        merge_image = cv.merge([b, g, r])
-        """创建三维数组，0维为B，1维为G，2维为R"""
-        height, width, channels = src.shape
-        img = np.zeros([height*2, width*2, channels], np.uint8)
-        img[0:height, 0:width] = np.expand_dims(b, axis=2)
-        img[0:height, width:width*2] = np.expand_dims(g, axis=2)
-        img[height:height*2, 0:width] = np.expand_dims(r, axis=2)
-        img[height:height*2, width:width*2] = merge_image
-
-        self.decode_and_show_dst(img)
 
     '''
     一些图像知识：
@@ -211,6 +188,33 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
     然后取最小均匀度对应区域的均值作为该像素点的新灰度值。分布越均匀，均匀度V值越小。v=<(f(x, y) - f_(x, y))^2
 
     '''
+
+    """
+    同时考虑空间与信息和灰度相似性，达到保边去噪的目的
+    双边滤波的核函数是空间域核与像素范围域核的综合结果：
+    在图像的平坦区域，像素值变化很小，对应的像素范围域权重接近于1，此时空间域权重起主要作用，相当于进行高斯模糊；
+    在图像的边缘区域，像素值变化很大，像素范围域权重变大，从而保持了边缘的信息。
+    """
+
+    # 图像二值化
+    def threshold(self):
+        src = self.cv_read_img(self.src_file)
+        if src is None:
+            return
+
+        gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
+
+        # 这个函数的第一个参数就是原图像，原图像应该是灰度图。
+        # 第二个参数就是用来对像素值进行分类的阈值。
+        # 第三个参数就是当像素值高于（有时是小于）阈值时应该被赋予的新的像素值
+        # 第四个参数来决定阈值方法，见threshold_simple()
+        # ret, binary = cv.threshold(gray, 127, 255, cv.THRESH_BINARY)
+        ret, dst = cv.threshold(
+            gray, 127, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
+        self.decode_and_show_dst(dst)
+
+    # 添加高斯噪声并对之进行平滑处理
+
     def noise_and_blur(self):
         src = self.cv_read_img(self.src_file)
         if src is None:
@@ -220,7 +224,8 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
         h, w, c = src.shape
         for row in range(h):
             for col in range(w):
-                s = np.random.normal(0, 20, 3)  # normal(loc=0.0, scale=1.0, size=None),均值，标准差，大小
+                # normal(loc=0.0, scale=1.0, size=None),均值，标准差，大小
+                s = np.random.normal(0, 20, 3)
 
                 b = src[row, col, 0]
                 g = src[row, col, 1]
@@ -240,47 +245,8 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
 
         self.decode_and_show_dst(img)
 
-    """
-    同时考虑空间与信息和灰度相似性，达到保边去噪的目的
-    双边滤波的核函数是空间域核与像素范围域核的综合结果：
-    在图像的平坦区域，像素值变化很小，对应的像素范围域权重接近于1，此时空间域权重起主要作用，相当于进行高斯模糊；
-    在图像的边缘区域，像素值变化很大，像素范围域权重变大，从而保持了边缘的信息。
-    """
-    # 高斯双边滤波
-    def bilateral_filter(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-
-        dst = cv.bilateralFilter(src, 0, 100, 15)
-        self.decode_and_show_dst(dst)
-
-    # 均值偏移滤波
-    def mean_shift_filter(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-
-        dst = cv.pyrMeanShiftFiltering(src, 10, 50)  # 均值偏移滤波
-        self.decode_and_show_dst(dst)
-
-    # 图像二值化
-    def threshold(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-
-        gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
-
-        # 这个函数的第一个参数就是原图像，原图像应该是灰度图。
-        # 第二个参数就是用来对像素值进行分类的阈值。
-        # 第三个参数就是当像素值高于（有时是小于）阈值时应该被赋予的新的像素值
-        # 第四个参数来决定阈值方法，见threshold_simple()
-        # ret, binary = cv.threshold(gray, 127, 255, cv.THRESH_BINARY)
-        ret, dst = cv.threshold(gray, 127, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
-        self.decode_and_show_dst(dst)
-
     # Canny边缘检测
+
     def canny_edge(self):
         src = self.cv_read_img(self.src_file)
         if src is None:
@@ -296,84 +262,18 @@ class ImageMiniLab(QMainWindow, Ui_ImageMiniLabUI):
         # dst = cv.Canny(gray, 50, 150)
         self.decode_and_show_dst(dst)
 
-    # 直线检测
-    def hough_line(self):
+    # 彩色图像直方图均衡化
+
+    def equalization(self):
         src = self.cv_read_img(self.src_file)
         if src is None:
             return
 
-        gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
-        edges = cv.Canny(gray, 50, 150, apertureSize=3)
-        lines = cv.HoughLines(edges, 1, np.pi/180, 200)
-
-        for line in lines:
-            rho, theta = line[0]
-            a = np.cos(theta)
-            b = np.sin(theta)
-            x0 = a * rho
-            y0 = b * rho
-            x1 = int(x0+1000*(-b))
-            y1 = int(y0+1000*(a))
-            x2 = int(x0-1000*(-b))
-            y2 = int(y0-1000*(a))
-            cv.line(src, (x1, y1), (x2, y2), (0, 0, 255), 2)
-
-        self.decode_and_show_dst(src)
-
-
-    # 圆检测
-    def hough_circles(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-
-        dst = cv.pyrMeanShiftFiltering(src, 10, 100)
-        cimage = cv.cvtColor(dst, cv.COLOR_BGR2GRAY)
-        circles = cv.HoughCircles(cimage, cv.HOUGH_GRADIENT, 1, 20, param1=50, param2=30, minRadius=0, maxRadius=0)
-        circles = np.uint16(np.around(circles))
-        for i in circles[0, :]:
-            cv.circle(src, (i[0], i[1]), i[2], (0, 0, 255), 2)
-            cv.circle(src, (i[0], i[1]), 2, (255, 0, 255), 2)
-
-        self.decode_and_show_dst(src)
-
-    # 轮廓发现
-    def find_contours(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-
-        dst = cv.GaussianBlur(src, (3, 3), 0)
-        gray = cv.cvtColor(dst, cv.COLOR_BGR2GRAY)
-        ret, binary = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
-        cloneImage, contous, heriachy = cv.findContours(binary, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        for i,contou in enumerate(contous):
-            cv.drawContours(src, contous, i, (0, 0, 255), 1)
-
-        # 轮廓
-        self.decode_and_show_dst(src)
-
-        # 轮廓覆盖
-        for i,contou in enumerate(contous):
-            cv.drawContours(src, contous, i, (0, 0, 255), -1)
-        self.decode_and_show_dst(src)
-    #人脸识别 正脸 需要下载xml模型 haarcascade_frontalface_alt.xml
-    def face_recognize(self):
-        src = self.cv_read_img(self.src_file)
-        if src is None:
-            return
-
-        gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
-        face_cascade = cv.CascadeClassifier('haarcascade_frontalface_alt2.xml')
-        faces = face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.15,
-            minNeighbors=3,
-            minSize=(5, 5)
-        )
-
-        for (x, y, w, h) in faces:
-            cv.rectangle(src, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        self.decode_and_show_dst(src)
-
-
+        # 彩色图像均衡化,需要分解通道 对每一个通道均衡化
+        (b, g, r) = cv.split(src)
+        bH = cv.equalizeHist(b)
+        gH = cv.equalizeHist(g)
+        rH = cv.equalizeHist(r)
+        # 合并每一个通道
+        dst = cv.merge((bH, gH, rH))
+        self.decode_and_show_dst(dst)
